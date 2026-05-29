@@ -1,52 +1,88 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Entity;
+
 use ApiPlatform\Metadata\ApiResource;
+use ApiPlatform\Metadata\Delete;
+use ApiPlatform\Metadata\Get;
+use ApiPlatform\Metadata\GetCollection;
+use ApiPlatform\Metadata\Post;
+use ApiPlatform\Metadata\Put;
+use App\Controller\UserCreateAction;
 use App\Repository\UserRepository;
-use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
+use Symfony\Bridge\Doctrine\Validator\Constraints\UniqueEntity;
 use Symfony\Component\Security\Core\User\PasswordAuthenticatedUserInterface;
 use Symfony\Component\Security\Core\User\UserInterface;
+use Symfony\Component\Serializer\Attribute\Groups;
+use Symfony\Component\Validator\Constraints as Assert;
+
 #[ORM\Entity(repositoryClass: UserRepository::class)]
-#[ORM\UniqueConstraint(name: 'UNIQ_IDENTIFIER_EMAIL', fields: ['email'])]
-#[ApiResource]
+#[ORM\Table(name: 'user')]
+#[UniqueEntity(fields: ['email'])]
+#[ApiResource(
+    normalizationContext: ['groups' => ['user:read']],
+    denormalizationContext: ['groups' => ['user:write']],
+    operations: [
+        new GetCollection(),
+        new Get(),
+        new Post(
+            uriTemplate: '/users',
+            controller: UserCreateAction::class
+        ),
+        new Put(),
+        new Delete(),
+    ]
+)]
 class User implements UserInterface, PasswordAuthenticatedUserInterface
 {
     #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column]
+    #[Groups(['user:read'])]
     private ?int $id = null;
 
-    #[ORM\Column(length: 180)]
+    #[ORM\Column(length: 180, unique: true)]
+    #[Assert\NotBlank(groups: ['user:write'])]
+    #[Assert\Email(groups: ['user:write'])]
+    #[Groups(['user:read', 'user:write'])]
     private ?string $email = null;
 
-    /**
-     * @var list<string> The user roles
-     */
-    #[ORM\Column]
+    #[ORM\Column(type: 'json')]
+    #[Groups(['user:read', 'user:write'])]
     private array $roles = [];
 
-    /**
-     * @var string The hashed password
-     */
     #[ORM\Column]
+    #[Assert\NotBlank(groups: ['user:write'])]
+    #[Assert\Length(min: 6, groups: ['user:write'])]
     private ?string $password = null;
 
     #[ORM\Column(length: 255)]
-    private ?string $givenName = null;
-
-    #[ORM\Column(type: Types::SMALLINT, nullable: true)]
-    private ?int $age = null;
+    #[Assert\NotBlank(groups: ['user:write'])]
+    #[Groups(['user:read', 'user:write'])]
+    private ?string $fullname = null;
 
     #[ORM\Column(length: 255)]
-    private ?string $gender = null;
+    #[Assert\NotBlank(groups: ['user:write'])]
+    #[Groups(['user:read', 'user:write'])]
+    private ?string $surname = null;
 
-    #[ORM\Column(length: 255, nullable: true)]
-    private ?string $phone = null;
+    #[ORM\Column]
+    #[Assert\NotNull(groups: ['user:write'])]
+    #[Assert\PositiveOrZero(groups: ['user:write'])]
+    #[Groups(['user:read', 'user:write'])]
+    private ?int $age = null;
 
     public function getId(): ?int
     {
         return $this->id;
+    }
+
+    public function getUserIdentifier(): string
+    {
+        return $this->email ?? '';
     }
 
     public function getEmail(): ?string
@@ -61,31 +97,14 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
         return $this;
     }
 
-    /**
-     * A visual identifier that represents this user.
-     *
-     * @see UserInterface
-     */
-    public function getUserIdentifier(): string
-    {
-        return (string) $this->email;
-    }
-
-    /**
-     * @see UserInterface
-     */
     public function getRoles(): array
     {
         $roles = $this->roles;
-        // guarantee every user at least has ROLE_USER
         $roles[] = 'ROLE_USER';
 
         return array_unique($roles);
     }
 
-    /**
-     * @param list<string> $roles
-     */
     public function setRoles(array $roles): static
     {
         $this->roles = $roles;
@@ -93,9 +112,6 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
         return $this;
     }
 
-    /**
-     * @see PasswordAuthenticatedUserInterface
-     */
     public function getPassword(): ?string
     {
         return $this->password;
@@ -108,31 +124,30 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
         return $this;
     }
 
-    /**
-     * Ensure the session doesn't contain actual password hashes by CRC32C-hashing them, as supported since Symfony 7.3.
-     */
-    public function __serialize(): array
-    {
-        $data = (array) $this;
-        $data["\0".self::class."\0password"] = hash('crc32c', $this->password);
-
-        return $data;
-    }
-
-    #[\Deprecated]
     public function eraseCredentials(): void
     {
-        // @deprecated, to be removed when upgrading to Symfony 8
     }
 
-    public function getGivenName(): ?string
+    public function getFullname(): ?string
     {
-        return $this->givenName;
+        return $this->fullname;
     }
 
-    public function setGivenName(string $givenName): static
+    public function setFullname(string $fullname): static
     {
-        $this->givenName = $givenName;
+        $this->fullname = $fullname;
+
+        return $this;
+    }
+
+    public function getSurname(): ?string
+    {
+        return $this->surname;
+    }
+
+    public function setSurname(string $surname): static
+    {
+        $this->surname = $surname;
 
         return $this;
     }
@@ -142,33 +157,9 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
         return $this->age;
     }
 
-    public function setAge(?int $age): static
+    public function setAge(int $age): static
     {
         $this->age = $age;
-
-        return $this;
-    }
-
-    public function getGender(): ?string
-    {
-        return $this->gender;
-    }
-
-    public function setGender(string $gender): static
-    {
-        $this->gender = $gender;
-
-        return $this;
-    }
-
-    public function getPhone(): ?string
-    {
-        return $this->phone;
-    }
-
-    public function setPhone(?string $phone): static
-    {
-        $this->phone = $phone;
 
         return $this;
     }
