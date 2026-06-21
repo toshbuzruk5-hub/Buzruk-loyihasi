@@ -17,7 +17,7 @@ final class MultipartDecoder implements DecoderInterface
 
     public function decode(string $data, string $format, array $context = []): ?array
     {
-        $request = $this->RequestStack->getCorrentRequest();
+        $request = $this->requestStack->getCurrentRequest();
 
         if (!$request) {
             return null;
